@@ -1,0 +1,48 @@
+name: JugaaduToons Daily Videos
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs at 19:30 and 03:30 India time (UTC schedule)
+    - cron: "0 14,22 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  create-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install tools and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Generate JugaaduToons Short
+        run: python generate_jugaadu_toons.py
+      - name: Save generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: jugaadu-toons-${{ github.run_number }}
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Prepare video for existing uploader
+        run: cp output/jugaadu_toons.mp4 output/usa_short.mp4
+      - name: Optional private YouTube upload
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          if [ -n "$YOUTUBE_CLIENT_ID" ] && [ -n "$YOUTUBE_CLIENT_SECRET" ] && [ -n "$YOUTUBE_REFRESH_TOKEN" ]; then
+            python upload_youtube.py
+          else
+            echo "YouTube OAuth secrets missing; generated video saved as artifact only."
+          fi
